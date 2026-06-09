@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-Ticket Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+  /* ── FORM UI ── */
+  .app-header {
+    background: #0064d2;
+    color: #fff;
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .app-header h1 { font-size: 20px; font-weight: 700; }
+  .app-header span { font-size: 13px; opacity: .8; }
+
+  .form-wrap {
+    max-width: 900px;
+    margin: 28px auto;
+    padding: 0 16px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    padding: 24px;
+  }
+  .card h2 {
+    font-size: 15px; font-weight: 700;
+    color: #0064d2; margin-bottom: 18px;
+    padding-bottom: 10px; border-bottom: 2px solid #e8f0fe;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .full  { grid-column: 1 / -1; }
+
+  label { display: block; font-size: 12px; color: #555; font-weight: 600; margin-bottom: 5px; }
+  input, select, textarea {
+    width: 100%; padding: 9px 12px; border: 1.5px solid #ddd;
+    border-radius: 8px; font-size: 14px; color: #222;
+    transition: border-color .2s;
+    background: #fafafa;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: #0064d2; background: #fff;
+  }
+
+  .trip-toggle {
+    display: flex; gap: 0; border-radius: 8px; overflow: hidden;
+    border: 1.5px solid #0064d2; width: fit-content;
+  }
+  .trip-toggle button {
+    padding: 8px 22px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; background: #fff; color: #0064d2;
+    transition: background .2s, color .2s;
+  }
+  .trip-toggle button.active { background: #0064d2; color: #fff; }
+
+  .segment-box {
+    border: 1.5px solid #e0e7ff; border-radius: 10px;
+    padding: 16px; background: #f7f9ff; margin-bottom: 12px;
+  }
+  .segment-box h3 { font-size: 13px; color: #0064d2; font-weight: 700; margin-bottom: 12px; }
+  .segment-arrow {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: #666; margin: 10px 0;
+  }
+  .segment-arrow::before, .segment-arrow::after {
+    content: ''; flex: 1; height: 1px; background: #ccd; 
+  }
+
+  .passenger-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 12px; align-items: end; margin-bottom: 10px;
+    padding-bottom: 10px; border-bottom: 1px dashed #eee;
+  }
+  .passenger-row:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .btn-add {
+    background: none; border: 1.5px dashed #0064d2; color: #0064d2;
+    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+    transition: background .2s;
+  }
+  .btn-add:hover { background: #e8f0fe; }
+  .btn-remove {
+    background: #fee; border: 1.5px solid #fcc; color: #c00;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+  }
+  .btn-remove:hover { background: #fdd; }
+
+  .btn-generate {
+    background: #0064d2; color: #fff; border: none;
+    padding: 14px 32px; border-radius: 10px; font-size: 16px;
+    font-weight: 700; cursor: pointer; width: 100%;
+    transition: background .2s; letter-spacing: .3px;
+  }
+  .btn-generate:hover { background: #0052a8; }
+
+  .btn-print {
+    background: #fff; color: #0064d2; border: 2px solid #0064d2;
+    padding: 10px 24px; border-radius: 8px; font-size: 14px;
+    font-weight: 700; cursor: pointer; transition: all .2s;
+  }
+  .btn-print:hover { background: #0064d2; color: #fff; }
+
+  /* ── TICKET PREVIEW AREA ── */
+  #preview-area { display: none; }
+  .preview-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .preview-header h2 { font-size: 18px; font-weight: 700; color: #222; }
+
+  /* ── TICKET STYLES (mirroring Traveloka) ── */
+  .ticket {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 3px 16px rgba(0,0,0,.12);
+    overflow: hidden;
+    margin-bottom: 24px;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    max-width: 860px;
+    margin-left: auto; margin-right: auto;
+  }
+
+  /* Blue decorative top-right blob */
+  .ticket-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid #eee;
+    position: relative;
+    overflow: hidden;
+  }
+  .ticket-header::after {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 180px; height: 120px;
+    background: #0064d2;
+    border-radius: 50%;
+    opacity: .12;
+  }
+  .ticket-header-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .ticket-type-label .main { font-size: 20px; font-weight: 800; color: #111; }
+  .ticket-type-label .sub  { font-size: 13px; color: #555; }
+  .traveloka-logo {
+    font-size: 22px; font-weight: 900; color: #0064d2;
+    letter-spacing: -0.5px;
+  }
+  .traveloka-logo span { color: #00b0f0; }
+
+  .ticket-date-row {
+    font-size: 14px; font-weight: 700; color: #222;
+    margin-bottom: 16px;
+  }
+
+  .flight-row {
+    display: flex; align-items: stretch; gap: 0;
+  }
+
+  /* airline info left */
+  .airline-col {
+    width: 200px; flex-shrink: 0;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .airline-logo-box {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: #e62;
+    margin-bottom: 8px;
+  }
+  .airline-logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #e62, #f84);
+    border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 11px; font-weight: 900;
+  }
+  .airline-info p { font-size: 12px; color: #333; line-height: 1.7; }
+  .airline-info strong { font-size: 13px; }
+
+  /* route center */
+  .route-col {
+    flex: 1; padding: 0 20px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .route-stop {
+    display: flex; align-items: flex-start; gap: 14px; position: relative;
+  }
+  .stop-time { font-size: 22px; font-weight: 800; color: #111; min-width: 60px; }
+  .stop-dot {
+    width: 14px; height: 14px; border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+    border: 3px solid #0064d2; background: #fff;
+  }
+  .stop-dot.filled { background: #fff; border-color: #888; }
+  .stop-info { flex: 1; }
+  .stop-city { font-size: 15px; font-weight: 700; color: #111; }
+  .stop-airport { font-size: 12px; color: #555; }
+
+  .route-line {
+    display: flex; align-items: center; padding: 4px 0 4px 74px; gap: 0;
+  }
+  .route-line-bar {
+    width: 2px; height: 28px; background: #ddd; margin-left: 5px;
+  }
+
+  /* booking info right */
+  .booking-col {
+    width: 200px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .booking-item label { font-size: 11px; color: #888; display: block; }
+  .booking-item .val { font-size: 15px; font-weight: 800; color: #111; }
+  .booking-item .val.code { font-size: 17px; }
+  .refund-badge {
+    background: #0064d2; color: #fff;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 4px; display: inline-block;
+  }
+  .refund-sub { font-size: 11px; color: #555; margin-top: 2px; }
+
+  /* QR + info strip */
+  .qr-strip {
+    display: flex; align-items: center; gap: 20px;
+    padding: 18px 28px; border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+  }
+  .qr-box canvas { width: 90px !important; height: 90px !important; }
+  .qr-text { font-size: 12px; color: #333; line-height: 1.6; max-width: 420px; }
+
+  /* info strip */
+  .info-strip {
+    display: flex; gap: 0;
+    padding: 14px 28px;
+    background: #f8f9fb;
+    border-bottom: 1px solid #eee;
+  }
+  .info-item {
+    flex: 1; display: flex; align-items: flex-start; gap: 10px; padding: 0 8px;
+    border-right: 1px solid #e2e5ea;
+  }
+  .info-item:last-child { border-right: none; }
+  .info-icon {
+    width: 30px; height: 30px; border-radius: 6px;
+    background: #e8f0fe; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0;
+  }
+  .info-item p { font-size: 12px; color: #333; font-weight: 600; line-height: 1.5; }
+
+  /* passenger table */
+  .passenger-section { padding: 20px 28px; }
+  .passenger-section h3 { font-size: 16px; font-weight: 800; color: #111; }
+  .passenger-section h3 small { font-size: 12px; font-weight: 400; color: #888; margin-left: 8px; }
+  .pax-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .pax-table th {
+    font-size: 12px; color: #888; font-weight: 600;
+    text-align: left; padding: 6px 8px; border-bottom: 2px solid #eee;
+  }
+  .pax-table td { font-size: 13px; color: #111; padding: 12px 8px; border-bottom: 1px solid #f0f0f0; }
+  .pax-table td strong { font-size: 14px; }
+  .baggage-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #222; margin-bottom: 4px; }
+  .baggage-item span { font-size: 16px; }
+
+  /* divider between flight segments */
+  .ticket-divider {
+    border-top: 3px dashed #e0e7ff;
+    margin: 0 28px;
+    position: relative;
+  }
+  .ticket-divider::before, .ticket-divider::after {
+    content: '';
+    position: absolute; top: -10px;
+    width: 20px; height: 20px; background: #f0f2f5;
+    border-radius: 50%;
+  }
+  .ticket-divider::before { left: -38px; }
+  .ticket-divider::after  { right: -38px; }
+
+  @media print {
+    body { background: #fff; }
+    .form-wrap, .preview-header, .btn-print { display: none !important; }
+    #preview-area { display: block !important; }
+    .ticket { box-shadow: none; margin: 0; }
+    .ticket-divider::before, .ticket-divider::after { display: none; }
+  }
+  @media (max-width: 640px) {
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    .passenger-row { grid-template-columns: 1fr 1fr; }
+    .flight-row { flex-direction: column; }
+    .booking-col, .airline-col { width: 100%; }
+    .info-strip { flex-direction: column; }
+    .info-item { border-right: none; border-bottom: 1px solid #e2e5ea; padding: 8px 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div>
+    <h1>✈ E-Ticket Generator</h1>
+    <span>Buat tiket pesawat seperti Traveloka</span>
+  </div>
+</div>
+
+<div class="form-wrap">
+
+  <!-- Trip Type -->
+  <div class="card">
+    <h2>✈ Jenis Perjalanan</h2>
+    <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
+      <div>
+        <label style="margin-bottom:8px;">Tipe Tiket</label>
+        <div class="trip-toggle">
+          <button id="btn-sekali" class="active" onclick="setTrip('sekali')">Sekali Jalan</button>
+          <button id="btn-pulang" onclick="setTrip('pulang')">Pulang Pergi</button>
+        </div>
+      </div>
+      <div>
+        <label>Jumlah Transit / Stopover</label>
+        <select id="transit-count" onchange="renderSegments()" style="max-width:200px;">
+          <option value="0">Tanpa Transit (Langsung)</option>
+          <option value="1">1 Transit</option>
+          <option value="2">2 Transit</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Booking Info -->
+  <div class="card">
+    <h2>📋 Informasi Pemesanan</h2>
+    <div class="grid3">
+      <div>
+        <label>Traveloka Booking ID</label>
+        <input type="text" id="booking-id" placeholder="cth. 1263910664" value="1263910664">
+      </div>
+      <div>
+        <label>Airline Booking Code (PNR)</label>
+        <input type="text" id="pnr" placeholder="cth. KQZUHS" value="KQZUHS">
+      </div>
+      <div>
+        <label>Kode Check-in Penerbangan</label>
+        <input type="text" id="checkin-code" placeholder="cth. ELVFHY" value="ELVFHY">
+      </div>
+      <div>
+        <label>Maskapai</label>
+        <input type="text" id="airline-name" placeholder="cth. Super Air Jet" value="Super Air Jet">
+      </div>
+      <div>
+        <label>Kode Penerbangan</label>
+        <input type="text" id="flight-code" placeholder="cth. IU-926" value="IU-926">
+      </div>
+      <div>
+        <label>Kelas</label>
+        <select id="flight-class">
+          <option>Economy</option>
+          <option>Business</option>
+          <option>First Class</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Segments -->
+  <div class="card">
+    <h2>🗺 Rute Penerbangan</h2>
+    <div id="segments-container"></div>
+  </div>
+
+  <!-- Return Flight (hidden by default) -->
+  <div class="card" id="return-card" style="display:none;">
+    <h2>🔄 Penerbangan Pulang</h2>
+    <div class="grid3">
+      <div>
+        <label>Kode Penerbangan Pulang</label>
+        <input type="text" id="return-flight-code" placeholder="cth. IU-927">
+      </div>
+      <div>
+        <label>Airline Booking Code Pulang (PNR)</label>
+        <input type="text" id="return-pnr" placeholder="cth. ABCDEF">
+      </div>
+      <div>
+        <label>Kode Check-in Pulang</label>
+        <input type="text" id="return-checkin" placeholder="cth. XYZABC">
+      </div>
+    </div>
+    <div id="return-segments-container" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- Passengers -->
+  <div class="card">
+    <h2>👥 Data Penumpang</h2>
+    <div id="passengers-container"></div>
+    <button class="btn-add" onclick="addPassenger()">+ Tambah Penumpang</button>
+  </div>
+
+  <button class="btn-generate" onclick="generateTicket()">🎫 Generate E-Ticket</button>
+
+  <!-- Preview -->
+  <div id="preview-area">
+    <div class="preview-header">
+      <h2>Preview E-Ticket</h2>
+      <button class="btn-print" onclick="window.print()">🖨 Cetak / Download PDF</button>
+    </div>
+    <div id="ticket-output"></div>
+  </div>
+
+</div>
+
+<script>
+let tripType = 'sekali';
+let passengerCount = 0;
+
+function setTrip(type) {
+  tripType = type;
+  document.getElementById('btn-sekali').classList.toggle('active', type === 'sekali');
+  document.getElementById('btn-pulang').classList.toggle('active', type === 'pulang');
+  document.getElementById('return-card').style.display = type === 'pulang' ? 'block' : 'none';
+  if (type === 'pulang') renderReturnSegments();
+}
+
+function renderSegments() {
+  const n = parseInt(document.getElementById('transit-count').value);
+  const c = document.getElementById('segments-container');
+  c.innerHTML = '';
+  const stops = n + 2; // origin + transit(s) + destination
+  for (let i = 0; i < stops - 1; i++) {
+    const label = i === 0 ? 'Keberangkatan' : `Transit ${i}`;
+    const label2 = i === stops - 2 ? 'Tujuan Akhir' : `Transit ${i+1}`;
+    c.innerHTML += buildSegmentHTML(i, label, label2, 'seg');
+  }
+  if (tripType === 'pulang') renderReturnSegments();
+}
+
+function renderReturnSegments() {
+  const n = parseInt(document.getElementById('transit-count').value);
+  const c = document.getElementById('return-segments-container');
+  c.innerHTML = '';
+  const stops = n + 2;
+  for (let i = 0; i < stops - 1; i++) {
+    const label = i === 0 ? 'Keberangkatan (Pulang)' : `Transit ${i} (Pulang)`;
+    const label2 = i === stops - 2 ? 'Tujuan Akhir (Pulang)' : `Transit ${i+1} (Pulang)`;
+    c.innerHTML += buildSegmentHTML(i, label, label2, 'ret');
+  }
+}
+
+function buildSegmentHTML(i, lA, lB, prefix) {
+  const defaults = [
+    { fromCity:'Jakarta', fromCode:'CGK', fromAirport:'Soekarno Hatta International Airport - Terminal 2E', toCity:'Palembang', toCode:'PLM', toAirport:'Sultan Mahmud Badaruddin II', date:'2025-06-26', dep:'14:55', arr:'16:05' },
+    { fromCity:'Palembang', fromCode:'PLM', fromAirport:'Sultan Mahmud Badaruddin II', toCity:'Singapore', toCode:'SIN', toAirport:'Changi Airport', date:'2025-06-26', dep:'17:00', arr:'18:30' },
+    { fromCity:'Singapore', fromCode:'SIN', fromAirport:'Changi Airport', toCity:'Tokyo', toCode:'NRT', toAirport:'Narita International Airport', date:'2025-06-26', dep:'20:00', arr:'06:00' }
+  ];
+  const d = defaults[i] || defaults[0];
+  return `
+  <div class="segment-box">
+    <h3>${lA} → ${lB}</h3>
+    <div class="grid3">
+      <div><label>Kota Asal</label><input type="text" id="${prefix}_from_city_${i}" value="${i === 0 && prefix==='seg' ? d.fromCity : (prefix==='ret' ? '' : d.fromCity)}" placeholder="cth. Jakarta"></div>
+      <div><label>Kode Bandara Asal</label><input type="text" id="${prefix}_from_code_${i}" value="${i === 0 && prefix==='seg' ? d.fromCode : ''}" placeholder="cth. CGK" style="text-transform:uppercase;"></div>
+      <div><label>Nama Bandara Asal</label><input type="text" id="${prefix}_from_airport_${i}" value="${i === 0 && prefix==='seg' ? d.fromAirport : ''}" placeholder="cth. Soekarno Hatta - Terminal 2E"></div>
+    </div>
+    <div class="segment-arrow">Terbang ke</div>
+    <div class="grid3">
+      <div><label>Kota Tujuan</label><input type="text" id="${prefix}_to_city_${i}" value="${i === 0 && prefix==='seg' ? d.toCity : ''}" placeholder="cth. Palembang"></div>
+      <div><label>Kode Bandara Tujuan</label><input type="text" id="${prefix}_to_code_${i}" value="${i === 0 && prefix==='seg' ? d.toCode : ''}" placeholder="cth. PLM" style="text-transform:uppercase;"></div>
+      <div><label>Nama Bandara Tujuan</label><input type="text" id="${prefix}_to_airport_${i}" value="${i === 0 && prefix==='seg' ? d.toAirport : ''}" placeholder="cth. Sultan Mahmud Badaruddin II"></div>
+    </div>
+    <div class="grid3" style="margin-top:10px;">
+      <div><label>Tanggal Penerbangan</label><input type="date" id="${prefix}_date_${i}" value="${d.date}"></div>
+      <div><label>Jam Berangkat</label><input type="time" id="${prefix}_dep_${i}" value="${d.dep}"></div>
+      <div><label>Jam Tiba</label><input type="time" id="${prefix}_arr_${i}" value="${d.arr}"></div>
+    </div>
+  </div>`;
+}
+
+function addPassenger() {
+  const c = document.getElementById('passengers-container');
+  const idx = passengerCount++;
+  const defaults = [{ name:'EFENDI HARUN', type:'Dewasa', ticket:'9902177882163', cabin:'7', baggage:'20' }];
+  const d = defaults[idx] || { name:'', type:'Dewasa', ticket:'', cabin:'7', baggage:'20' };
+  const div = document.createElement('div');
+  div.className = 'passenger-row';
+  div.id = `pax-${idx}`;
+  div.innerHTML = `
+    <div><label>Nama Penumpang (KAPITAL)</label><input type="text" id="pax_name_${idx}" value="${d.name}" placeholder="cth. BUDI SANTOSO" style="text-transform:uppercase;"></div>
+    <div><label>Tipe</label><select id="pax_type_${idx}"><option>Dewasa</option><option>Anak</option><option>Bayi</option></select></div>
+    <div><label>Nomor Tiket</label><input type="text" id="pax_ticket_${idx}" value="${d.ticket}" placeholder="cth. 9902177882163"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div><label>Bagasi Kabin (KG)</label><input type="number" id="pax_cabin_${idx}" value="${d.cabin}" placeholder="7"></div>
+      <div><label>Bagasi Tercatat (KG)</label><input type="number" id="pax_baggage_${idx}" value="${d.baggage}" placeholder="20"></div>
+    </div>
+    <button class="btn-remove" onclick="document.getElementById('pax-${idx}').remove()">✕</button>`;
+  c.appendChild(div);
+}
+
+function getVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dayID = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthsID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} / ${dayID[d.getDay()]}, ${d.getDate()} ${monthsID[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function collectSegments(prefix, n) {
+  const segs = [];
+  for (let i = 0; i < n; i++) {
+    segs.push({
+      fromCity:    getVal(`${prefix}_from_city_${i}`),
+      fromCode:    getVal(`${prefix}_from_code_${i}`).toUpperCase(),
+      fromAirport: getVal(`${prefix}_from_airport_${i}`),
+      toCity:      getVal(`${prefix}_to_city_${i}`),
+      toCode:      getVal(`${prefix}_to_code_${i}`).toUpperCase(),
+      toAirport:   getVal(`${prefix}_to_airport_${i}`),
+      date:        getVal(`${prefix}_date_${i}`),
+      dep:         getVal(`${prefix}_dep_${i}`),
+      arr:         getVal(`${prefix}_arr_${i}`),
+    });
+  }
+  return segs;
+}
+
+function collectPassengers() {
+  const pax = [];
+  document.querySelectorAll('[id^="pax_name_"]').forEach(el => {
+    const idx = el.id.split('_').pop();
+    pax.push({
+      name:    el.value.toUpperCase(),
+      type:    getVal(`pax_type_${idx}`),
+      ticket:  getVal(`pax_ticket_${idx}`),
+      cabin:   getVal(`pax_cabin_${idx}`),
+      baggage: getVal(`pax_baggage_${idx}`),
+    });
+  });
+  return pax;
+}
+
+function buildRouteLabel(segs) {
+  if (!segs.length) return '';
+  const codes = [segs[0].fromCode, ...segs.map(s => s.toCode)];
+  return codes.join(' - ');
+}
+
+function buildTicketHTML(segs, passengers, info, isReturn) {
+  const n = parseInt(document.getElementById('transit-count').value);
+  const routeLabel = buildRouteLabel(segs);
+  const firstDate  = segs[0] ? formatDate(segs[0].date) : '';
+  const qrId = `qr-${isReturn ? 'ret' : 'dep'}-${Date.now()}`;
+
+  // Build flight segments HTML
+  let segmentsHTML = '';
+  segs.forEach((seg, i) => {
+    const isLast = i === segs.length - 1;
+    segmentsHTML += `
+      <div class="route-stop">
+        <div class="stop-time">${seg.dep}</div>
+        <div class="stop-dot"></div>
+        <div class="stop-info">
+          <div class="stop-city">${seg.fromCity} (${seg.fromCode})</div>
+          <div class="stop-airport">${seg.fromAirport}</div>
+        </div>
+      </div>
+      <div class="route-line"><div class="route-line-bar"></div></div>`;
+    if (isLast) {
+      segmentsHTML += `
+      <div class="route-stop">
+        <div class="stop-time">${seg.arr}</div>
+        <div class="stop-dot filled"></div>
+        <div class="stop-info">
+          <div class="stop-city">${seg.toCity} (${seg.toCode})</div>
+          <div class="stop-airport">${seg.toAirport}</div>
+        </div>
+      </div>`;
+    }
+  });
+
+  // Passengers table rows
+  const paxRows = passengers.map((p, i) => `
+    <tr>
+      <td>${i + 1}.</td>
+      <td><strong>Tn. ${p.name}</strong><br><span style="font-size:12px;color:#777;">(${p.type})</span></td>
+      <td style="font-size:12px;color:#555;">${routeLabel}</td>
+      <td>
+        <div class="baggage-item"><span>🧳</span> <strong>${p.cabin} KG Bagasi Kabin</strong></div>
+        <div style="font-size:11px;color:#888;margin-left:26px;margin-bottom:6px;">*Dimensi bagasi mengikuti kebijakan maskapai</div>
+        <div class="baggage-item"><span>🗃</span> <strong>${p.baggage} KG Bagasi</strong></div>
+      </td>
+      <td><strong>${p.ticket}</strong></td>
+    </tr>`).join('');
+
+  return `
+  <div class="ticket">
+    <div class="ticket-header">
+      <div class="ticket-header-top">
+        <div class="ticket-type-label">
+          <div class="main">E-ticket / E-tiket</div>
+          <div class="sub">${isReturn ? 'Return Flight / Penerbangan Pulang' : 'Departure Flight / Penerbangan Pergi'}</div>
+        </div>
+        <div class="traveloka-logo">traveloka<span>★</span></div>
+      </div>
+      <div class="ticket-date-row">${firstDate}</div>
+
+      <div class="flight-row">
+        <!-- Airline Info -->
+        <div class="airline-col">
+          <div class="airline-logo-box">
+            <div class="airline-logo-icon">${info.airline.substring(0,2).toUpperCase()}</div>
+            <div>${info.airline}</div>
+          </div>
+          <div class="airline-info">
+            <p><strong>${info.flightCode}</strong></p>
+            <p>${info.flightClass}</p>
+            <p style="color:#888;font-size:11px;">Dioperasikan oleh ${info.airline}</p>
+          </div>
+        </div>
+
+        <!-- Route -->
+        <div class="route-col">
+          ${segmentsHTML}
+        </div>
+
+        <!-- Booking Info -->
+        <div class="booking-col">
+          <div class="booking-item">
+            <label>Traveloka Booking ID<br>No. Pesanan Traveloka</label>
+            <div class="val">${info.bookingId}</div>
+          </div>
+          <div class="booking-item">
+            <label>Airline Booking Code (PNR)<br>Kode Booking Maskapai (PNR)</label>
+            <div class="val code">${info.pnr}</div>
+          </div>
+          <div class="booking-item">
+            <label>Kode Check-in<br>Penerbangan</label>
+            <div class="val code">${info.checkinCode}</div>
+          </div>
+          <div>
+            <div class="refund-badge">BISA REFUND</div>
+            <div class="refund-sub">Ada batas waktu untuk refund<br>(pelajari lewat E-tiket di App).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Strip -->
+    <div class="qr-strip">
+      <div class="qr-box" id="${qrId}"></div>
+      <div class="qr-text">
+        Pindai kode QR pada mesin self check-in di bandara atau kepada staf di konter check-in untuk mendapatkan boarding pass Anda.<br><br>
+        Kode QR hanya berlaku untuk maskapai Lion Air Group (Lion Air, Batik Air, dan Super Air Jet).
+      </div>
+    </div>
+
+    <!-- Info Strip -->
+    <div class="info-strip">
+      <div class="info-item">
+        <div class="info-icon">🪪</div>
+        <p>Tunjukkan e-tiket dan identitas para penumpang saat check-in</p>
+      </div>
+      <div class="info-item">
+        <div class="info-icon">⏰</div>
+        <p>Check-in paling lambat 90 menit sebelum keberangkatan</p>
+      </div>
+      <div class="info-item">
+        <div class="info-icon">ℹ️</div>
+        <p>Waktu tertera adalah waktu bandara setempat</p>
+      </div>
+    </div>
+
+    <!-- Passenger Details -->
+    <div class="passenger-section">
+      <h3>Passenger Details <small>Detail Penumpang</small></h3>
+      <table class="pax-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Passenger(s)<br><span style="font-weight:400;">Nama Penumpang</span></th>
+            <th>Route<br><span style="font-weight:400;">Rute</span></th>
+            <th>Flight Facilities<br><span style="font-weight:400;">Fasilitas Penerbangan</span></th>
+            <th>Ticket Number<br><span style="font-weight:400;">Nomor Tiket</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${paxRows}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function generateTicket() {
+  const n = parseInt(document.getElementById('transit-count').value);
+  const segCount = n + 1;
+
+  const depSegs = collectSegments('seg', segCount);
+  const passengers = collectPassengers();
+  if (!passengers.length) { alert('Tambahkan minimal 1 penumpang!'); return; }
+
+  const info = {
+    bookingId:   getVal('booking-id'),
+    pnr:         getVal('pnr').toUpperCase(),
+    checkinCode: getVal('checkin-code').toUpperCase(),
+    airline:     getVal('airline-name'),
+    flightCode:  getVal('flight-code').toUpperCase(),
+    flightClass: getVal('flight-class'),
+  };
+
+  let html = buildTicketHTML(depSegs, passengers, info, false);
+
+  if (tripType === 'pulang') {
+    const retSegs = collectSegments('ret', segCount);
+    const retInfo = {
+      ...info,
+      pnr:         getVal('return-pnr').toUpperCase() || info.pnr,
+      checkinCode: getVal('return-checkin').toUpperCase() || info.checkinCode,
+      flightCode:  getVal('return-flight-code').toUpperCase() || info.flightCode,
+    };
+    html += `<div style="height:24px;"></div>`;
+    html += buildTicketHTML(retSegs, passengers, retInfo, true);
+  }
+
+  const out = document.getElementById('ticket-output');
+  out.innerHTML = html;
+  document.getElementById('preview-area').style.display = 'block';
+
+  // Generate QR codes
+  setTimeout(() => {
+    const qrDep = document.querySelector('[id^="qr-dep-"]');
+    if (qrDep) new QRCode(qrDep, { text: `${info.bookingId}|${info.pnr}|${info.checkinCode}`, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
+    if (tripType === 'pulang') {
+      const qrRet = document.querySelector('[id^="qr-ret-"]');
+      if (qrRet) new QRCode(qrRet, { text: `${getVal('return-pnr')||info.pnr}|${getVal('return-checkin')||info.checkinCode}`, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
+    }
+    out.scrollIntoView({ behavior: 'smooth' });
+  }, 100);
+}
+
+// Init
+renderSegments();
+addPassenger();
+</script>
+</body>
+</html>
